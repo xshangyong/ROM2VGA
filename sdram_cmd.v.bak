@@ -1,0 +1,121 @@
+
+module sdram_cmd
+(
+	clk,
+	rst_n,
+	sdram_addr,
+	sdram_ba,
+	sdram_ncas,
+	sdram_clke,
+	sdram_nwe,
+	sdram_ncs,
+	sdram_dqm,
+	sdram_nras,
+	init_st,
+	work_st,
+	sdram_ini_done
+);
+
+	
+	
+	
+	`include "sdram_para.v"
+	input 			clk;
+	input 			rst_n;
+	input 			init_st;
+	input 			work_st;
+	input 			sdram_ini_done;   //  high vilid
+	
+	
+	output[12:0]	sdram_addr;
+	output[1:0]		sdram_ba;
+	output	 		sdram_ncas;
+	output	 		sdram_clke;
+	output	 		sdram_nwe;
+	output	 		sdram_ncs;
+	output[1:0]		sdram_dqm;
+	output			sdram_nras;
+
+
+	reg[4:0]		cmd_r;
+	reg[12:0]		sdram_addr_r;
+	reg[1:0]		sdram_ba_r;	
+//						CLKE,CS,RAS,CAS,WE
+	assign sdram_addr 	= sdram_addr_r;
+	assign sdram_ba 	= sdram_ba_r;
+	
+	assign {sdram_clke,sdram_ncs,sdram_nras,sdram_ncas,sdram_nwe} = cmd_r;
+	
+	always @(posedge clk or negedge rst_n) begin
+		if(!rst_n) begin
+			cmd_r			<= `CMD_RST;
+			sdram_addr_r 	<= 13'hfff;
+			sdram_ba_r		<= 2'b11;
+		end
+		else begin
+			case(init_st)
+			
+			I_200us: begin
+				cmd_r <= `CMD_NOP;
+				sdram_addr_r 	<= 13'hfff;
+				sdram_ba_r		<= 2'b11;
+			end
+			
+			I_pre: begin
+				cmd_r <= `CMD_CHG;  
+				a[10] <= 1'b1;		// all bank  a[10] = 1'b1
+			end
+			
+			I_wait_pre: begin
+				cmd_r <= `CMD_NOP;
+				sdram_addr_r 	<= 13'hfff;
+				sdram_ba_r		<= 2'b11;				
+			end
+			
+			I_refresh1,I_refresh2,I_refresh3,I_refresh4,I_refresh5,
+			I_refresh6,I_refresh7,I_refresh8: begin
+				cmd_r <= `CMD_REF;
+			end
+			
+			I_wait_re1,I_wait_re2,I_wait_re3,I_wait_re4,I_wait_re5,
+			I_wait_re6,I_wait_re7,I_wait_re8: begin
+				cmd_r <= `CMD_NOP;
+				sdram_addr_r 	<= 13'hfff;
+				sdram_ba_r		<= 2'b11;				
+			end
+			
+			I_mrs: begin
+				cmd_r <= `CMD_MRS;
+				sdram_ba_r		<= 2'b00;				
+				sdram_addr_r 	<= {3'b0,
+									1'b0, 	//A9 	:	burst read and write
+									2'b0,
+									3'b011, //A6A5A4: 	CAS latency = 3
+									1'b0,   //A3	:	Sequential
+									3'b111, //A2A1A0:	burst length = full page
+									};
+			end
+			
+			I_wati_mrs: begin
+				cmd_r <= `CMD_NOP;
+				sdram_addr_r 	<= 13'hfff;
+				sdram_ba_r		<= 2'b11;				
+			end
+			
+			I_done: begin
+				case(work_st)
+					
+				endcase
+			end
+
+			endcase
+			
+			
+			
+		end
+	end
+	
+	
+    
+	
+endmodule

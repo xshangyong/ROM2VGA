@@ -1,0 +1,56 @@
+module reset_gen
+(
+	clk_100,
+	clk_133,
+	rst_n,
+	rst_100,
+	rst_133
+);
+
+	input 		clk_100;
+	input		clk_133;
+	input 		rst_n;
+	output reg	rst_100;
+	output reg	rst_133;
+	reg			rst_r;
+	reg			rst_133a;
+	reg			rst_133b;
+	reg[32:0]	cnt_rst = 0;
+	
+	
+	always @(posedge clk_100) begin
+		if(!rst_n) begin
+			if(cnt_rst == 32'd1000000) begin //10ms
+				cnt_rst <= cnt_rst;
+			end
+			else begin
+				cnt_rst <= cnt_rst + 1;
+			end
+		end
+		else begin
+			cnt_rst <= 0;
+		end
+	end
+	
+	always @(posedge clk_100) begin
+		if(cnt_rst == 32'd1000000) begin
+			rst_100 <= 0;
+		end
+		else begin
+			rst_100 <= 1;
+		end
+	end
+	
+	always @(posedge clk_133 or negedge rst_n) begin
+		if(!rst_n) begin
+			rst_133 <= rst_100;
+			rst_133a <= rst_100;
+			rst_133b <= rst_100;
+		end
+		else begin
+			rst_133a <= rst_100;
+			rst_133b <= rst_133a;
+			rst_133  <= rst_133b;
+		end
+	end
+endmodule
