@@ -69,11 +69,7 @@ module vga_module
 	wire [2:0]		rom_dat;
 	wire  [2:0]     rom_dat_use;
 	wire[15:0]		rd_rom_add;
-	reg				start_wr_fifo;
 	reg				wr_fifo_en = 0;
-	reg				wr_fifo_en1p;
-	reg				VSYNC_Sig_1d;
-	reg[3:0]		wr_fifo_st;
 	wire [2:0]		fifo_dat;
 	wire			ps2_done_r;
 	wire[1:0]		ps2_break_r;
@@ -94,6 +90,9 @@ module vga_module
 	wire			wr_sdram_ack;
 	reg[23:0]		wr_sdram_add=0;
 	wire[15:0]		wr_sdram_data;
+	
+	wire			rst_100o;
+	wire			rst_133o;
 	
 	wire			rst_100;
 	wire			rst_133;
@@ -158,6 +157,8 @@ module vga_module
 		.rst_100    (rst_100),
 		.rst_133	(rst_133)
 	);
+
+	
 	sdram_top inst_sdtop
 	(
 		.clk			(clk_133M	),  // use 133MHz clk
@@ -253,7 +254,7 @@ module vga_module
 			else begin
 				case(st_rdsdram)
 					0 : begin
-						if(wr_sdram_finish == 1 &&
+						if(wr_sdram_finishb == 1 &&
 							rd_fifo_used <= 512 &&
 							rd_sdram_add[21:9] < 128) begin
 							st_rdsdram <= 1;
@@ -277,11 +278,8 @@ module vga_module
 		if(!rst_133) begin
 			wr_sdram_finishb <= 0;
 		end
-		else if (wr_sdram_add[21:9] >= 127)begin//(wr_sdram_add[21:9] == 127)begin
+		else if (wr_sdram_add[21:9] >= 127)begin //(wr_sdram_add[21:9] == 127  && VSYNC_Sig == 0 )begin
 			wr_sdram_finishb <= 1;
-		end
-		else begin
-			wr_sdram_finishb <= 0;
 		end
 	end
 	
@@ -295,7 +293,7 @@ module vga_module
 			wr_sdram_finish  <= wr_sdram_finisha;
 		end
 	end
-	
+
 	// write sdram, wr_sdram_req high means write begins,ack high means write finished 
 	// start when fifo_used >= 512
 	always@(posedge clk_133M or negedge rst_133)begin
@@ -320,7 +318,7 @@ module vga_module
 						wr_sdram_add[21:9] <= wr_sdram_add[21:9] + 1'b1;
 						wr_sdram_req <= 0;
 						st_wrsdram <= 0;
-						wr_sdram_times <= wr_sdram_times + 1;
+						wr_sdram_times <= wr_sdram_times + 8'b1;
 					end
 				end
 			endcase
@@ -367,8 +365,8 @@ module vga_module
 	
 	 digitron inst_digi
 	(
-		.clk_i(clk_133M),
-		.rst_i(clk_133M),
+		.clk_i(CLK),
+		.rst_i(rst_100),
 		.num_i(test_rdsdram),
 		.row_o(row_o),
 		.column_o(column_o)
@@ -419,10 +417,29 @@ assign  vsyn_neg    = VSYNC_Sig_d1 & ~VSYNC_Sig;  //negadge
 assign  vga_rdfifo 	= is_pic & Ready_Sig & wr_sdram_finish;
 	 
 	 
+	 
+	reg rst_vgasyn,rst_vgasyn1,rst_vgasyn2;
+	
+	always @(*) begin
+		if(!rst_133) begin
+			rst_vgasyn = 0;
+		end
+		else begin
+			if(wr_sdram_add[21:9] >= 127) begin
+				rst_vgasyn = 1;
+			end
+		end
+	end
+
+	always @ ( posedge clk_100M) begin
+		rst_vgasyn1 <= rst_vgasyn;
+		rst_vgasyn2 <= rst_vgasyn1;
+	end
+	
 	sync_module inst_sync
 	(
 		.CLK( clk_100M ),
-		.RSTn( rst_100 ),
+		.RSTn( rst_vgasyn2  ), //rst_100
 		.VSYNC_Sig( VSYNC_Sig_d1 ),   // output - to top
 		.HSYNC_Sig( HSYNC_Sig_d1 ),   // output - to top
 		.Column_Addr_Sig( Column_Addr_Sig ), // output - to inst_vga_control
@@ -435,7 +452,7 @@ assign  vga_rdfifo 	= is_pic & Ready_Sig & wr_sdram_finish;
 	 vga_control_module inst_vga_control
 	 (
 	      .CLK( clk_100M ),
-		  .RSTn( rst_100 ),
+		  .RSTn( rst_vgasyn2 ), //rst_100
 		  .Ready_Sig( Ready_Sig ),             // input - from inst_sync
 		  .Column_Addr_Sig( Column_Addr_Sig ), // input - from inst_sync
 		  .Row_Addr_Sig( Row_Addr_Sig ),       // input - from inst_sync
