@@ -1,6 +1,6 @@
 //def
 //abc
-//qwe
+//qwe  abc
 module vga_module
 (
 	CLK, 
